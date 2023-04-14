@@ -8,9 +8,3 @@ include /usr/share/dpkg/default.mk
 
 %:
 	dh $@
-
-override_dh_install:
-	dh_install
-	for x in if-up.d if-pre-up.d if-post-down.d; do \
-	    mkdir -p debian/vxlan-huai-utils/etc/network/"$${x}"; \
-	done
