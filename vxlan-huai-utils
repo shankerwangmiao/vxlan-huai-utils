@@ -1,0 +1,93 @@
+#!/bin/bash
+
+if [ -z "$IF_VXLAN_VNI" ]; then
+	exit 0;
+fi
+
+function prep_args {
+	add_args=()
+	if [ -n "$IF_VXLAN_PORT" ]; then
+		add_args+=("dstport" "$IF_VXLAN_PORT")
+	fi
+	if [ -n "$IF_VXLAN_REMOTE" ]; then
+		add_args+=("remote" "$IF_VXLAN_REMOTE")
+	fi
+	if [ -n "$IF_VXLAN_GROUP" ]; then
+		add_args+=("group" "$IF_VXLAN_GROUP")
+	fi
+	if [ -n "$IF_VXLAN_TTL" ]; then
+		add_args+=("ttl" "$IF_VXLAN_TTL")
+	fi
+	if [ -n "$IF_VXLAN_LOCAL" ]; then
+		add_args+=("local" "$IF_VXLAN_LOCAL")
+	fi
+}
+
+function parse_fdb {
+	python3 - "$IF_VXLAN_FDB" "$IF_VXLAN_LOCAL" "$IFACE" << 'EOF'
+import sys,socket,yaml,ipaddress
+inet = 0
+fdb = yaml.safe_load(open(sys.argv[1], mode='r'))
+try:
+  localIP = ipaddress.ip_address(sys.argv[2])
+  if isinstance(localIP, ipaddress.IPv4Address):
+    inet = 4
+  else:
+    inet = 6
+except ValueError:
+  localIP = None
+for group in fdb:
+  try:
+    try:
+      group_addr = ipaddress.ip_address(group['addr'])
+      if group_addr == ipaddress.ip_address("0.0.0.0") or group_addr == ipaddress.ip_address("::"):
+        group_mac = "00:00:00:00:00:00"
+      elif group_addr.is_multicast:
+        if isinstance(group_addr, ipaddress.IPv4Address):
+          group_mac = "01:00:5e:{:02x}:{:02x}:{:02x}".format(group_addr.packed[1] & ~0x80, *group_addr.packed[2:4])
+        else:
+          group_mac = "33:33:{:02x}:{:02x}:{:02x}:{:02x}".format(*group_addr.packed[12:16])
+      else:
+        raise Exception("Expect Multicast Address, but got {}".format(group_addr))
+    except ValueError:
+      group_mac = group['addr']
+ 
+    for dest in group['dest']:
+      try:
+        dest_addr = ipaddress.ip_address(dest)
+        if inet == 4:
+          if not isinstance(dest_addr, ipaddress.IPv4Address):
+            raise Exception("Expect IPv4 Address, but got {}".format(dest))
+        elif inet == 6:
+          if not isinstance(dest_addr, ipaddress.IPv6Address):
+            raise Exception("Expect IPv6 Address, but got {}".format(dest))
+        else:
+          if isinstance(dest_addr, ipaddress.IPv4Address):
+            inet = 4
+          else:
+            inet = 6
+        if not dest_addr == localIP:
+          print("fdb append {} dev {} dst {}".format(group_mac, sys.argv[3], dest_addr))
+      except Exception as e:
+        print(e, file=sys.stderr) 
+  except Exception as e:
+    print(e, file=sys.stderr)
+EOF
+}
+
+
+case "$PHASE" in 
+	pre-up)
+		prep_args
+		exec ip link add name "$IFACE" type vxlan id "$IF_VXLAN_VNI" "${add_args[@]}"
+		;;
+	post-up)
+		if [ -r "$IF_VXLAN_FDB" ]; then
+			echo "Loading FDB for device $IFACE" >&2
+			parse_fdb | bridge -batch -
+			bridge fdb show dev "$IFACE" >&2
+		fi
+		;;
+	post-down)
+		exec ip link del "$IFACE"
+esac

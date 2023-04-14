@@ -1,0 +1,16 @@
+Source: vxlan-huai-utils
+Section: admin
+Priority: optional
+Maintainer: Aron Xu <happyaron.xu@gmail.com>
+Build-Depends: debhelper (>= 10),
+Standards-Version: 4.5.1
+Rules-Requires-Root: no
+
+Package: vxlan-huai-utils
+Architecture: all
+Depends: ${misc:Depends},
+ python3:any (>= 3.5),
+ python3-yaml,
+ ifupdown
+Description: vxlan utilities by shanker huai
+ vxlan utilities by shanker huai

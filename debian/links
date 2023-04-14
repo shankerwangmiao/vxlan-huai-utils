@@ -1,0 +1,3 @@
+usr/lib/vxlan-huai-utils/ifupdown.d/vxlan-huai-utils etc/network/if-post-down.d/vxlan-huai-utils
+usr/lib/vxlan-huai-utils/ifupdown.d/vxlan-huai-utils etc/network/if-pre-up.d/vxlan-huai-utils
+usr/lib/vxlan-huai-utils/ifupdown.d/vxlan-huai-utils etc/network/if-up.d/vxlan-huai-utils
